@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BaseError, createPublicClient, createWalletClient, custom, formatUnits, getAddress, http, type Address, type Hash } from 'viem'
 import { mainnet } from 'viem/chains'
-import { BAL, BAL_ABI, DEFAULT_RPC, EXPLORER } from './config'
+import { BAL, BAL_ABI, DEFAULT_RPC, EXPLORER, MERKL_ABI, MERKL_DISTRIBUTOR } from './config'
 import { parseAmount, validateRpc } from './amount'
 import { discoverWallets, type Wallet } from './wallet'
 import { AddressScanCard } from "./AddressScanCard";
-import { BurnHistory } from "./BurnHistory";
+import { BurnClaims } from "./BurnClaims";
+import { fetchMerklClaims, type MerklClaim } from "./merkl";
 
 const short = (address: string) => address.slice(0, 6) + '…' + address.slice(-4)
 const display = (value: bigint) => Number(formatUnits(value, 18)).toLocaleString('en-US', { maximumFractionDigits: 6 })
@@ -30,7 +31,8 @@ export default function App() {
   const [amount, setAmount] = useState('')
   const [review, setReview] = useState(false)
   const [tx, setTx] = useState<Transaction>({ phase: 'idle' })
-  const busy = tx.phase === 'signing' || tx.phase === 'confirming'
+  const [claimingToken, setClaimingToken] = useState<Address | null>(null)
+  const busy = tx.phase === 'signing' || tx.phase === 'confirming' || claimingToken !== null
   const transactionLock = useRef(false)
   const generation = useRef(0)
   const identity = useRef({ account, wallet, rpc, scanTarget })
@@ -113,10 +115,36 @@ export default function App() {
     finally { transactionLock.current = false; void refresh() }
   }
 
+  async function claimReward(claim: MerklClaim) {
+    if (transactionLock.current || !account || !wallet || readOnly || chainId !== 1 || claim.available === 0n || claim.proofs === null) throw new Error('Connect the selected wallet on Ethereum to claim available rewards.')
+    transactionLock.current = true
+    setClaimingToken(claim.tokenAddress)
+    const owner = account, selected = wallet, endpoint = rpc
+    let hash: Hash | undefined
+    try {
+      if (await client.getChainId() !== 1) throw new Error('RPC is not Ethereum mainnet.')
+      const rewards = await fetchMerklClaims(owner, new AbortController().signal, true)
+      const reward = rewards.find(item => item.tokenAddress.toLowerCase() === claim.tokenAddress.toLowerCase())
+      if (!reward || reward.available === 0n) throw new Error('No rewards remain available for this token.')
+      if (reward.proofs === null) throw new Error('No supported Merkle proof is available for this reward.')
+      const { request } = await client.simulateContract({ address: MERKL_DISTRIBUTOR, abi: MERKL_ABI, functionName: 'claim', args: [[owner], [reward.tokenAddress], [reward.amount], [reward.proofs]], account: owner })
+      const accounts = await selected.provider.request({ method: 'eth_accounts' })
+      const network = await selected.provider.request({ method: 'eth_chainId' })
+      if (identity.current.wallet !== selected || identity.current.account !== owner || identity.current.scanTarget?.toLowerCase() !== owner.toLowerCase() || identity.current.rpc !== endpoint || accounts[0]?.toLowerCase() !== owner.toLowerCase() || Number(network) !== 1) throw new Error('Wallet, account, network, or RPC changed. Try claiming again.')
+      const signer = createWalletClient({ chain: mainnet, transport: custom(selected.provider) })
+      hash = await signer.writeContract(request)
+      let replaced = false
+      const receipt = await client.waitForTransactionReceipt({ hash, confirmations: 1, timeout: 180_000, onReplaced: replacement => { replaced ||= replacement.reason !== 'repriced'; hash = replacement.transaction.hash } })
+      if (replaced) throw new Error('Claim cancelled or replaced with a different transaction.')
+      if (receipt.status !== 'success') throw new Error('Claim transaction reverted.')
+    } catch (e) { throw new Error(message(e) + (hash ? ' Transaction: ' + hash + '. Check its status before retrying.' : '')) }
+    finally { transactionLock.current = false; setClaimingToken(null) }
+  }
+
   function saveRpc(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     try { const url = validateRpc(rpcDraft); localStorage.setItem('bal-burn:rpc', url); setRpc(url); setSettingsOpen(false); setReview(false); setError('') } catch (e) { setError(message(e)) }
-  }
+    }
 
   useEffect(() => {
     if (!review) return
@@ -163,19 +191,18 @@ export default function App() {
       
       <AddressScanCard account={account} loading={loading} disabled={busy} onSelect={setScanTarget} onScan={() => void refresh()} />
       
-      {scanTarget && <div className="layout"><section className="card burn-card" aria-label="Burn BAL">
+      {scanTarget && <div className="layout"><div className="action-cards"><section className="card burn-card" aria-label="Burn BAL">
         
         <div className="balance-row"><label htmlFor="amount">Amount to burn</label><span>Balance: <strong>{balance === null ? '—' : display(balance)} BAL</strong></span></div>
         <div className="amount-field"><input id="amount" inputMode="decimal" placeholder="0.0" autoComplete="off" value={amount} disabled={busy} onChange={e => { setAmount(e.target.value); setReview(false) }} aria-invalid={!!amountError} aria-describedby={amountError ? 'amount-error' : undefined}/><span>BAL</span><button className="max" disabled={balance === null || balance === 0n || busy || loading} onClick={() => { setAmount(formatUnits(balance!, 18)); }}>MAX</button></div>
         {amountError && <p id="amount-error" className="field-error">{amountError}</p>}
-        {!account ? <button className="primary full" disabled={connecting || busy} onClick={() => void connect()}>Connect wallet to continue</button> : readOnly ? <button className="secondary full" disabled>Read-only address</button> : chainId !== 1 ? <button className="primary full" disabled={busy} onClick={() => void switchChain()}>Switch to Ethereum</button> : <button data-review-burn className="primary" style={{ width: 160, height: 40, flexShrink: 0, marginTop: 16, display: 'block', marginLeft: 'auto' }} disabled={!canBurn} onClick={() => setReview(true)}>{busy ? tx.phase === 'signing' ? 'Confirm in your wallet…' : 'Waiting for confirmation…' : 'Burn'}</button>}
+        {!account ? <button className="primary full" disabled={connecting || busy} onClick={() => void connect()}>Connect wallet to continue</button> : readOnly ? <button className="secondary full" disabled>Read-only address</button> : chainId !== 1 ? <button className="primary full" disabled={busy} onClick={() => void switchChain()}>Switch to Ethereum</button> : <button data-review-burn className="primary" style={{ width: 160, height: 40, flexShrink: 0, marginTop: 16, display: 'block', marginLeft: 'auto' }} disabled={!canBurn} onClick={() => setReview(true)}>{tx.phase === 'signing' ? 'Confirm in your wallet…' : tx.phase === 'confirming' ? 'Waiting for confirmation…' : 'Burn'}</button>}
         
-      </section><aside>
+      </section>
+        <BurnClaims key={scanTarget} address={scanTarget} refreshKey={historyVersion} onClaim={claimReward} canClaim={!readOnly && chainId === 1} disabled={busy} />
+        </div><aside /></div>}
         
-        <BurnHistory key={rpc + scanTarget} client={client} address={scanTarget} refreshKey={historyVersion} />
-        
-      </aside></div>}
-      <section className="card about-card" aria-labelledby="about-title">
+        <section className="card about-card" aria-labelledby="about-title">
         <h2 id="about-title">About burning BAL</h2>
         <p><a href="https://forum.balancer.fi/t/bip-928-orderly-winddown-of-balancer-and-distribution-of-the-treasury/7107" target="_blank" rel="noreferrer">BIP-928<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: 'middle', transform: 'translateY(-6px)' }}><path d="M7 17 17 7M7 7h10v10" /></svg></a> proposes distributing Balancer’s treasury to BAL holders as part of an orderly winddown. The proposal sets out two distribution rounds.</p>
         <p><strong>Round one:</strong> From the end of May to the end of November 2027, holders redeem BAL through a claim contract, which burns it and distributes a proportional share of the treasury in the tokens held.</p>
@@ -185,10 +212,10 @@ export default function App() {
       </section>
       {error && <div className="error" role="alert">{error}</div>}
       {(tx.phase === 'confirming' || tx.phase === 'error') && <section className={'card transaction ' + tx.phase} aria-live="polite"><strong>{tx.phase === 'error' ? 'Burn not confirmed' : 'Transaction submitted. Waiting for an on-chain receipt…'}</strong>{tx.error && <p role="alert">{tx.error}{tx.hash && ' Check the transaction before retrying; it may still confirm.'}</p>}{tx.hash && <a href={EXPLORER + '/tx/' + tx.hash} target="_blank" rel="noreferrer">View transaction on Etherscan ↗</a>}</section>}
-      <footer className="muted" style={{ marginTop: 32 }}>
+      <footer className="muted" style={{ marginTop: 16 }}>
         BAL burns are irreversible and reduce the total supply.
         <br />
-        This site is fully static; it only talks to the RPC you configure.
+        This site is fully static; it talks to the RPC you configure and the Merkl API.
       </footer>
     </main>
     {review && <div className="modal-backdrop"><section className="card modal" role="dialog" aria-modal="true" aria-labelledby="review-title"><h2 id="review-title">Burn {amount} BAL?</h2><p className="muted">Your wallet will show the final network fee before you sign.</p><div className="input-row"><button autoFocus className="secondary" onClick={() => setReview(false)}>Cancel</button><button className="danger" disabled={!canBurn} onClick={() => void burn()}>Burn {amount} BAL</button></div></section></div>}

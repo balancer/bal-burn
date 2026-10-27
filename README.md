@@ -1,6 +1,6 @@
 # BAL Burn
 
-Standalone, static Ethereum mainnet app, styled like ../vebal-unlocks. React + Vite + viem; no backend, indexer, analytics, or API keys.
+Standalone, static Ethereum mainnet app, styled like ../vebal-unlocks. React + Vite + viem; no app backend, indexer, analytics, or API keys. Balances use the configured RPC; claims use the public Merkl API.
 
 ## Run
 
@@ -11,7 +11,9 @@ npm run build     # static site in dist/
 npm test          # Playwright browser + validation tests
 ```
 
-Install a browser for tests if needed: `npx playwright install chromium`. Deploy `dist/` to any static host; wallets require HTTPS except on localhost.
+> **Note:** The e2e suite was removed; `npm test` currently finds no tests.
+
+Install a browser for tests if needed: `npx playwright install chromium`. Deploy `dist/` behind a host that also proxies `/api/merkl/*` to `https://api.merkl.xyz/v4/*`; a purely static host needs a separate proxy service. Wallets require HTTPS except on localhost.
 
 ## Contract and behavior
 
@@ -22,14 +24,22 @@ Install a browser for tests if needed: `npx playwright install chromium`. Deploy
 - BAL has 18 decimals. Strict decimal validation rejects rounding, scientific notation, zero, negatives, and amounts exceeding balance.
 - A review dialog precedes simulation and the wallet signature request. Gas is paid in ETH; there is no app fee or compensation.
 - Checks RPC chain ID, wallet chain and account, and simulates the exact call before requesting a transaction. Success requires an on-chain successful receipt. Tracks replacement hashes and handles wallet cancellation.
-- Select a connected wallet or add a read-only address, saved for the browser session. The burn and history cards appear only when an address is selected. Only the selected connected account can burn.
+- Select a connected wallet or add a read-only address, saved for the browser session. The burn and claims cards appear only when an address is selected. Only the selected connected account can burn.
 - Only injected wallets (EIP-6963 discovery and legacy injection); no WalletConnect. Disconnect is local, not permission revocation.
 
-## Burn history
+## Merkl claims
 
-History is fetched from the configured RPC using BAL's ERC-20 `Transfer` events, filtered to the selected address as `from` and the zero address as `to`. BAL emits these when tokens are burned; there is no separate Burn event. Rows show the exact BAL amount, the block’s date/time in UTC, and an arrow linking to the transaction, newest first. Block timestamps are fetched once per unique block in each batch.
+The **BAL Burn claims** card sits below the burn form. It appears only after selecting an address, including a read-only address. It fetches the same-origin `/api/merkl/users/{address}/rewards/summary?chainId=1`, proxied to `https://api.merkl.xyz/v4/users/{address}/rewards/summary?chainId=1`, following `frontend-monorepo/packages/lib/modules/portfolio/merkl/useHasMerklRewards.ts`.
 
-History starts on **1 October 2026, 00:00 UTC**, at Ethereum block **26,093,738** (00:00:11 UTC; the preceding block is 30 September 23:59:59 UTC). The scan automatically fetches 5,000-block batches backwards to that cutoff, showing results as they arrive. There is no manual pagination button. Empty history is shown only after the scan completes; failed requests remain visible with a retry action. Scan BAL and confirmed burns refresh history. Switching address or RPC clears stale results. RPC log errors are displayed separately from the balance with a retry action.
+Amounts are `amount - claimed` (floored at zero), calculated with bigint. Positive display amounts below 0.01 appear as `<0.01`, with the exact amount in the tooltip; transaction amounts and proofs remain unchanged. Pending rewards are not included in this amount and cannot be claimed. Fully claimed rewards with nothing pending are hidden. Empty results show **No claims found...**; loading uses the overlay spinner, and API failures show an error and retry button. Switching the address cancels the previous request. Scan BAL and confirmed burns refresh claims.
+
+This lists the selected address's Ethereum Merkl rewards, not only a particular BAL burn campaign; no campaign IDs have been configured. Each reward has its own **Claim** button, enabled only for the selected connected account on Ethereum and a positive claimable amount with supported Merkle proofs. It calls Ethereum’s Merkl Distributor (`0x3Ef3D8bA38EBe18DB133cEc108f4D14CE00Dd9Ae`) using the cumulative API `amount` and proofs, not the net displayed amount. Proofs and balances are refreshed before simulation; account and network are rechecked before signing. The app waits for a successful receipt and then refetches with `reloadChainId=1`. Burn and claim transactions share a lock to prevent concurrent submissions. Merkl receives the selected address and browser request; no wallet signature is requested for this lookup.
+
+## Merkl CORS proxy
+
+Merkl's response can omit `Access-Control-Allow-Origin` for browser requests from localhost. The app uses a same-origin `/api/merkl` route instead. Vite development and preview servers proxy it to Merkl, removing Origin, Cookie and Authorization headers from upstream requests. No CORS browser bypass or public third-party relay is used.
+
+Production hosting must provide the equivalent reverse proxy: `/api/merkl/*` → `https://api.merkl.xyz/v4/*`. Do not forward app cookies or authorization headers. Vite's proxy is not bundled into `dist/`.
 
 ## RPC and privacy
 
@@ -37,6 +47,6 @@ Default RPC: `https://ethereum-rpc.publicnode.com`. Configure another Ethereum R
 
 ## Verification
 
-`npm run build` typechecks and builds. `npm test` covers exact precision, validation, mobile overflow, balance/MAX, review/cancel, direct burn calldata and receipt confirmation, rejected signatures, failed simulations, and chain mismatch. Browser tests mock RPC and wallet calls; they do not spend funds or establish live-chain execution. For real transaction testing use a disposable mainnet fork and an injected wallet connected to that fork (chain ID 1), and point the app RPC at the same fork.
+`npm run build` typechecks and builds. For real transaction testing use a disposable mainnet fork and an injected wallet connected to that fork (chain ID 1), and point the app RPC at the same fork.
 
 Burning is permanent. Never test by burning real tokens unless that loss is intentional.
