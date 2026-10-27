@@ -46,6 +46,7 @@ export function BurnClaims({ address, refreshKey, onClaim, canClaim, disabled }:
 
   return <section className="card claims-card" aria-labelledby="claims-title">
     <h2 id="claims-title">BAL Burn claims</h2>
+    <p className="muted" style={{ fontSize: 13, margin: 0 }}>After burning BAL it takes about 24 hours before your claim will appear here</p>
     <div className="claims-body" aria-busy={loading}>
       {loading && <div className="history-overlay"><span className="spinner" role="status" aria-label="Loading Merkl claims" /></div>}
       {!loading && !error && claims.length === 0 && <p className="muted">No claims found...</p>}
