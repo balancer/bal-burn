@@ -51,6 +51,8 @@ footer { font-size: 12px; margin-top: 16px; }
 .input-row input { flex: 1; }
 .modal-backdrop { position: fixed; inset: 0; background: #10151bcc; display: grid; place-items: center; padding: 16px; z-index: 10; overflow: auto; }
 .modal { max-width: 520px; width: 100%; margin: auto; }
+.modal.rewards-modal { max-width: 340px; }
+.modal.rewards-modal .input-row { margin-top: 40px; }
 .modal p, .modal dl { }
 .modal dt { color: var(--text-secondary); margin-top: 12px; }
 .modal dd { margin: 0; overflow-wrap: anywhere; font-family: monospace; }
@@ -71,9 +73,9 @@ footer { font-size: 12px; margin-top: 16px; }
 
 .claims-body { position: relative; min-height: 56px; margin-top: 12px; }
 .claims-body > p { margin: 0; padding-top: 8px; }
-.claims-table { overflow-x: auto; }
 .claim-row { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) 160px; gap: 8px; padding: 8px 0; }
 .claim-row button { width: 160px; height: 40px; }
 .claim-row span { min-width: 0; overflow-wrap: anywhere; }
 .claim-reward { text-align: left; font-variant-numeric: tabular-nums; }
 .claims-error { color: var(--red-300); overflow-wrap: anywhere; }
+.overview-row { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; }

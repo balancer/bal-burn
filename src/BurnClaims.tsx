@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatUnits, type Address } from 'viem'
 import { fetchMerklClaims, type MerklClaim } from './merkl'
 import { formatTokenAmount } from "./amount";
@@ -6,7 +6,7 @@ import { formatTokenAmount } from "./amount";
 export function BurnClaims({ address, refreshKey, onClaim, canClaim, disabled }: {
   address: Address
   refreshKey: number
-  onClaim: (claim: MerklClaim) => Promise<void>
+  onClaim: (claims: MerklClaim[]) => Promise<void>
   canClaim: boolean
   disabled: boolean
 }) {
@@ -15,15 +15,17 @@ export function BurnClaims({ address, refreshKey, onClaim, canClaim, disabled }:
   const [error, setError] = useState('')
   const [claimError, setClaimError] = useState('')
   const [retry, setRetry] = useState(0)
-  const [activeToken, setActiveToken] = useState<Address | null>(null)
-  const submitting = useRef(false)
+  const [claiming, setClaiming] = useState(false)
+  const [overview, setOverview] = useState(false)
   const reload = useRef(false)
+
+  const claimable = claims.filter(claim => claim.available > 0n && claim.proofs !== null)
 
   useEffect(() => {
     const controller = new AbortController()
     const reloadChain = reload.current
     reload.current = false
-    setLoading(true); setError(''); setClaims([])
+    setLoading(true); setError(''); setClaims([]); setOverview(false)
     void fetchMerklClaims(address, controller.signal, reloadChain).then(result => {
       if (!controller.signal.aborted) setClaims(result)
     }).catch((e: unknown) => {
@@ -32,34 +34,51 @@ export function BurnClaims({ address, refreshKey, onClaim, canClaim, disabled }:
     return () => controller.abort()
   }, [address, refreshKey, retry])
 
-  async function claimReward(claim: MerklClaim) {
-    if (submitting.current || disabled || !canClaim || claim.available === 0n || claim.proofs === null) return
-    submitting.current = true
-    setActiveToken(claim.tokenAddress); setClaimError('')
+  useEffect(() => {
+    if (!overview) return
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOverview(false)
+      else if (event.key === 'Tab') {
+        const buttons = document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+        const first = buttons[0], last = buttons[buttons.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', keydown)
+    return () => { document.removeEventListener('keydown', keydown) }
+  }, [overview])
+
+  async function claimAll() {
+    if (claiming || disabled || !canClaim || claimable.length === 0) return
+    setClaiming(true); setClaimError('')
     try {
-      await onClaim(claim)
+      await onClaim(claimable)
+      setOverview(false)
       reload.current = true
       setRetry(value => value + 1)
     } catch (e) { setClaimError(e instanceof Error ? e.message : 'Could not claim rewards.') }
-    finally { submitting.current = false; setActiveToken(null) }
+    finally { setClaiming(false) }
   }
+
 
   return <section className="card claims-card" aria-labelledby="claims-title">
     <h2 id="claims-title">BAL Burn claims</h2>
     <p className="muted" style={{ fontSize: 13, margin: 0 }}>After burning BAL it takes about 24 hours before your claim will appear here</p>
     <div className="claims-body" aria-busy={loading}>
       {loading && <div className="history-overlay"><span className="spinner" role="status" aria-label="Loading Merkl claims" /></div>}
-      {!loading && !error && claims.length === 0 && <p className="muted">No claims found...</p>}
-      {!loading && claims.length > 0 && <div className="claims-table">
-        
-        {claims.map((claim, index) => <div className="claim-row" key={claim.tokenAddress + ':' + index}>
-          
-          <span className="claim-reward" title={formatUnits(claim.available, claim.decimals) + ' ' + claim.symbol + (claim.pending > 0n ? ' · Pending: ' + formatUnits(claim.pending, claim.decimals) : '')}>{formatTokenAmount(claim.available, claim.decimals)} {claim.symbol}</span>
-          <button className="primary" disabled={disabled || activeToken !== null || !canClaim || claim.available === 0n || claim.proofs === null} title={!canClaim ? 'Connect this address on Ethereum to claim.' : claim.available === 0n ? 'Pending rewards are not claimable yet.' : claim.proofs === null ? 'No supported Merkle proof available.' : undefined} onClick={() => void claimReward(claim)}>{activeToken === claim.tokenAddress ? 'Claiming…' : 'Claim'}</button>
-        </div>)}
+      {!loading && !error && claimable.length === 0 && <p className="muted">No claims found...</p>}
+      {!loading && !error && claimable.length > 0 && <div className="claim-row">
+        <span className="claim-reward">Rewards available</span>
+        <button className="primary" disabled={disabled || claiming || !canClaim} title={!canClaim ? 'Connect this address on Ethereum to claim.' : undefined} onClick={() => { setClaimError(''); setOverview(true) }}>{claiming ? 'Claiming…' : 'Claim'}</button>
       </div>}
-      {claimError && <p className="claims-error" role="alert">{claimError}</p>}
+      {claimError && !overview && <p className="claims-error" role="alert">{claimError}</p>}
       {error && <p className="muted" role="alert">No claim data available, go to <a href="https://app.merkl.xyz" target="_blank" rel="noreferrer">Merkl<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: 'middle', transform: 'translateY(-6px)' }}><path d="M7 17 17 7M7 7h10v10" /></svg></a> directly to claim</p>}
     </div>
+    {overview && <div className="modal-backdrop"><section className="card modal rewards-modal" role="dialog" aria-modal="true" aria-labelledby="overview-title"><h2 id="overview-title">Rewards</h2>
+      {claimable.map(claim => <div className="overview-row" key={claim.tokenAddress}><span>{claim.symbol}</span><span title={formatUnits(claim.available, claim.decimals) + ' ' + claim.symbol}>{formatTokenAmount(claim.available, claim.decimals)}</span></div>)}
+      {claimError && <p className="claims-error" role="alert">{claimError}</p>}
+      <div className="input-row"><button autoFocus className="secondary" onClick={() => setOverview(false)}>Cancel</button><button className="primary" disabled={claiming} onClick={() => void claimAll()}>{claiming ? 'Claiming…' : 'Claim all'}</button></div>
+    </section></div>}
   </section>
 }

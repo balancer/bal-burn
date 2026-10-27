@@ -31,8 +31,8 @@ export default function App() {
   const [amount, setAmount] = useState('')
   const [review, setReview] = useState(false)
   const [tx, setTx] = useState<Transaction>({ phase: 'idle' })
-  const [claimingToken, setClaimingToken] = useState<Address | null>(null)
-  const busy = tx.phase === 'signing' || tx.phase === 'confirming' || claimingToken !== null
+  const [claiming, setClaiming] = useState(false)
+  const busy = tx.phase === 'signing' || tx.phase === 'confirming' || claiming
   const transactionLock = useRef(false)
   const generation = useRef(0)
   const identity = useRef({ account, wallet, rpc, scanTarget })
@@ -115,19 +115,24 @@ export default function App() {
     finally { transactionLock.current = false; void refresh() }
   }
 
-  async function claimReward(claim: MerklClaim) {
-    if (transactionLock.current || !account || !wallet || readOnly || chainId !== 1 || claim.available === 0n || claim.proofs === null) throw new Error('Connect the selected wallet on Ethereum to claim available rewards.')
+  async function claimReward(claims: MerklClaim[]) {
+    const tokens = claims.filter(claim => claim.available > 0n && claim.proofs !== null)
+    if (transactionLock.current || !account || !wallet || readOnly || chainId !== 1 || tokens.length === 0) throw new Error('Connect the selected wallet on Ethereum to claim available rewards.')
     transactionLock.current = true
-    setClaimingToken(claim.tokenAddress)
+    setClaiming(true)
     const owner = account, selected = wallet, endpoint = rpc
     let hash: Hash | undefined
-    try {
+      try {
       if (await client.getChainId() !== 1) throw new Error('RPC is not Ethereum mainnet.')
       const rewards = await fetchMerklClaims(owner, new AbortController().signal, true)
-      const reward = rewards.find(item => item.tokenAddress.toLowerCase() === claim.tokenAddress.toLowerCase())
-      if (!reward || reward.available === 0n) throw new Error('No rewards remain available for this token.')
-      if (reward.proofs === null) throw new Error('No supported Merkle proof is available for this reward.')
-      const { request } = await client.simulateContract({ address: MERKL_DISTRIBUTOR, abi: MERKL_ABI, functionName: 'claim', args: [[owner], [reward.tokenAddress], [reward.amount], [reward.proofs]], account: owner })
+      const fresh: MerklClaim[] = []
+      for (const token of tokens) {
+          const reward = rewards.find(item => item.tokenAddress.toLowerCase() === token.tokenAddress.toLowerCase())
+        if (reward && reward.available > 0n) fresh.push(reward)
+      }
+      if (fresh.length === 0) throw new Error('No rewards remain available for these tokens.')
+      if (fresh.some(reward => reward.proofs === null)) throw new Error('No supported Merkle proof is available for this reward.')
+      const { request } = await client.simulateContract({ address: MERKL_DISTRIBUTOR, abi: MERKL_ABI, functionName: 'claim', args: [fresh.map(() => owner), fresh.map(reward => reward.tokenAddress), fresh.map(reward => reward.amount), fresh.map(reward => reward.proofs!)], account: owner })
       const accounts = await selected.provider.request({ method: 'eth_accounts' })
       const network = await selected.provider.request({ method: 'eth_chainId' })
       if (identity.current.wallet !== selected || identity.current.account !== owner || identity.current.scanTarget?.toLowerCase() !== owner.toLowerCase() || identity.current.rpc !== endpoint || accounts[0]?.toLowerCase() !== owner.toLowerCase() || Number(network) !== 1) throw new Error('Wallet, account, network, or RPC changed. Try claiming again.')
@@ -138,7 +143,7 @@ export default function App() {
       if (replaced) throw new Error('Claim cancelled or replaced with a different transaction.')
       if (receipt.status !== 'success') throw new Error('Claim transaction reverted.')
     } catch (e) { throw new Error(message(e) + (hash ? ' Transaction: ' + hash + '. Check its status before retrying.' : '')) }
-    finally { transactionLock.current = false; setClaimingToken(null) }
+    finally { transactionLock.current = false; setClaiming(false) }
   }
 
   function saveRpc(event: React.SubmitEvent<HTMLFormElement>) {
