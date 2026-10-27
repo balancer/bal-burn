@@ -58,7 +58,7 @@ export function BurnClaims({ address, refreshKey, onClaim, canClaim, disabled }:
         </div>)}
       </div>}
       {claimError && <p className="claims-error" role="alert">{claimError}</p>}
-      {error && <div className="claims-error"><p role="alert">{error}</p><button className="primary" style={{ width: 160, height: 40, flexShrink: 0, marginTop: 16, display: 'block', marginLeft: 'auto' }} onClick={() => setRetry(value => value + 1)}>Retry claims</button></div>}
+      {error && <p className="muted" role="alert">No claim data available, go to <a href="https://app.merkl.xyz" target="_blank" rel="noreferrer">Merkl<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ verticalAlign: 'middle', transform: 'translateY(-6px)' }}><path d="M7 17 17 7M7 7h10v10" /></svg></a> directly to claim</p>}
     </div>
   </section>
 }

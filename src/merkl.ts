@@ -1,7 +1,7 @@
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
 // frontend-monorepo/packages/lib/modules/portfolio/merkl/useHasMerklRewards.ts
-export const MERKL_API = '/api/merkl'
+export const MERKL_API = import.meta.env.DEV ? '/api/merkl' : 'https://api.merkl.xyz/v4'
 export interface MerklClaim { tokenAddress: Address; symbol: string; decimals: number; amount: bigint; available: bigint; pending: bigint; proofs: Hex[] | null }
 
 function object(value: unknown): Record<string, unknown> {

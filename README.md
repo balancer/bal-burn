@@ -13,7 +13,7 @@ npm test          # Playwright browser + validation tests
 
 > **Note:** The e2e suite was removed; `npm test` currently finds no tests.
 
-Install a browser for tests if needed: `npx playwright install chromium`. Deploy `dist/` behind a host that also proxies `/api/merkl/*` to `https://api.merkl.xyz/v4/*`; a purely static host needs a separate proxy service. Wallets require HTTPS except on localhost.
+Install a browser for tests if needed: `npx playwright install chromium`. Deploy `dist/` to any static host; Merkl is called directly in production. Wallets require HTTPS except on localhost.
 
 ## Contract and behavior
 
@@ -37,9 +37,7 @@ This lists the selected address's Ethereum Merkl rewards, not only a particular 
 
 ## Merkl CORS proxy
 
-Merkl's response can omit `Access-Control-Allow-Origin` for browser requests from localhost. The app uses a same-origin `/api/merkl` route instead. Vite development and preview servers proxy it to Merkl, removing Origin, Cookie and Authorization headers from upstream requests. No CORS browser bypass or public third-party relay is used.
-
-Production hosting must provide the equivalent reverse proxy: `/api/merkl/*` → `https://api.merkl.xyz/v4/*`. Do not forward app cookies or authorization headers. Vite's proxy is not bundled into `dist/`.
+Merkl's response can omit `Access-Control-Allow-Origin` for browser requests from localhost, while it echoes the header for deployed origins. Development therefore uses a same-origin `/api/merkl` route that Vite's development and preview servers proxy to Merkl, removing Origin, Cookie and Authorization headers from upstream requests. Production builds call `https://api.merkl.xyz/v4` directly. No CORS browser bypass or public third-party relay is used.
 
 ## RPC and privacy
 
