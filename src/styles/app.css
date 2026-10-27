@@ -13,12 +13,11 @@ input, select { background: var(--bg-level0); color: var(--gray-200); border: 1p
 .secondary { background: var(--bg-level4); color: var(--text-tertiary); border: 1px solid var(--border-default); }
 .danger { background: var(--red-600); color: white; }
 .full { width: 100%; padding: 10px 16px; margin-top: 16px; }
-.action-cards { min-width: 0; }
-.layout > aside { position: relative; min-height: 0; align-self: stretch; }
+.layout > * { min-width: 0; }
 .about-card { margin-top: 16px; }
 .about-card h2 { margin-bottom: 8px; }
 .about-card p { margin: 8px 0 0; }
-.claims-card { margin-top: 16px; }
+.claims-card { margin-top: 0; }
 .claims-card h2 { margin-bottom: 0; font-size: 18px; }
 #root { max-width: 960px; margin: 0 auto; padding: 0 16px 64px; }
 .row { display: flex; align-items: center; gap: 8px; }
@@ -31,7 +30,7 @@ h1.gradient-text { background: var(--gradient-text-special); -webkit-background-
 h2 { margin: 0 0 20px; }
 h3 { margin: 16px 0 8px; }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .card { background: var(--bg-level1); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; box-shadow: var(--shadow-card); }
 .balance-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .balance-row > span { color: var(--text-secondary); }

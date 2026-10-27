@@ -191,7 +191,7 @@ export default function App() {
       
       <AddressScanCard account={account} loading={loading} disabled={busy} onSelect={setScanTarget} onScan={() => void refresh()} />
       
-      {scanTarget && <div className="layout"><div className="action-cards"><section className="card burn-card" aria-label="Burn BAL">
+      {scanTarget && <div className="layout"><section className="card burn-card" aria-label="Burn BAL">
         
         <div className="balance-row"><label htmlFor="amount">Amount to burn</label><span>Balance: <strong>{balance === null ? '—' : display(balance)} BAL</strong></span></div>
         <div className="amount-field"><input id="amount" inputMode="decimal" placeholder="0.0" autoComplete="off" value={amount} disabled={busy} onChange={e => { setAmount(e.target.value); setReview(false) }} aria-invalid={!!amountError} aria-describedby={amountError ? 'amount-error' : undefined}/><span>BAL</span><button className="max" disabled={balance === null || balance === 0n || busy || loading} onClick={() => { setAmount(formatUnits(balance!, 18)); }}>MAX</button></div>
@@ -199,8 +199,7 @@ export default function App() {
         {!account ? <button className="primary full" disabled={connecting || busy} onClick={() => void connect()}>Connect wallet to continue</button> : readOnly ? <button className="secondary full" disabled>Read-only address</button> : chainId !== 1 ? <button className="primary full" disabled={busy} onClick={() => void switchChain()}>Switch to Ethereum</button> : <button data-review-burn className="primary" style={{ width: 160, height: 40, flexShrink: 0, marginTop: 16, display: 'block', marginLeft: 'auto' }} disabled={!canBurn} onClick={() => setReview(true)}>{tx.phase === 'signing' ? 'Confirm in your wallet…' : tx.phase === 'confirming' ? 'Waiting for confirmation…' : 'Burn'}</button>}
         
       </section>
-        <BurnClaims key={scanTarget} address={scanTarget} refreshKey={historyVersion} onClaim={claimReward} canClaim={!readOnly && chainId === 1} disabled={busy} />
-        </div><aside /></div>}
+        <BurnClaims key={scanTarget} address={scanTarget} refreshKey={historyVersion} onClaim={claimReward} canClaim={!readOnly && chainId === 1} disabled={busy} /></div>}
         
         <section className="card about-card" aria-labelledby="about-title">
         <h2 id="about-title">About burning BAL</h2>
