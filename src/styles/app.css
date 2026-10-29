@@ -17,7 +17,7 @@ input, select { background: var(--bg-level0); color: var(--gray-200); border: 1p
 .about-card { margin-top: 16px; }
 .about-card h2 { margin-bottom: 8px; }
 .about-card p { margin: 8px 0 0; }
-.claims-card { margin-top: 0; }
+.claims-card { display: flex; flex-direction: column; margin-top: 0; }
 .claims-card h2 { margin-bottom: 0; font-size: 18px; }
 #root { max-width: 960px; margin: 0 auto; padding: 0 16px 64px; }
 .row { display: flex; align-items: center; gap: 8px; }
@@ -71,9 +71,9 @@ footer { font-size: 12px; margin-top: 16px; }
 .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid var(--border-default); border-top-color: var(--primary-400); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.claims-body { position: relative; min-height: 56px; margin-top: 12px; }
+.claims-body { position: relative; min-height: 56px; margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; justify-content: flex-end; }
 .claims-body > p { margin: 0; padding-top: 8px; }
-.claim-row { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) 160px; gap: 8px; padding: 8px 0; }
+.claim-row { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) 160px; gap: 8px; }
 .claim-row button { width: 160px; height: 40px; }
 .claim-row span { min-width: 0; overflow-wrap: anywhere; }
 .claim-reward { text-align: left; font-variant-numeric: tabular-nums; }
